@@ -1,7 +1,7 @@
 import numpy as np
 from fasterrisk.fasterrisk import RiskScoreOptimizer, RiskScoreClassifier
 
-from Orange.base import Learner, Model
+from Orange.classification import Learner, Model
 from Orange.data import Table, Storage
 from Orange.preprocess import Discretize, Impute, Continuize, SelectBestFeatures
 from Orange.preprocess.discretize import Binning
@@ -37,13 +37,13 @@ class ScoringSheetLearner(Learner):
 
     __returns__ = ScoringSheetModel
 
-    preprocessors = [Discretize(method=Binning()), Impute(), Continuize(), SelectBestFeatures(method=ReliefF(), k=20)]
+    preprocessors = [Discretize(method=Binning()), Impute(), Continuize()]
     feature_to_group = None
     def __init__(self, num_attr_after_selection, num_decision_params, max_points_per_param, num_input_features):
-        self.num_attr_after_selection = num_attr_after_selection
         self.num_decision_params = num_decision_params
         self.max_points_per_param = max_points_per_param
         self.num_input_features = num_input_features
+        self.preprocessors.append(SelectBestFeatures(method=ReliefF(), k=num_attr_after_selection))
         super().__init__()
 
     def fit_storage(self, table):
@@ -87,7 +87,7 @@ class ScoringSheetLearner(Learner):
         original_feature_names = [attribute.compute_value.variable.name for attribute in table.domain.attributes]
         feature_to_group_index = {feature: idx for idx, feature in enumerate(set(original_feature_names))}
         feature_to_group = [feature_to_group_index[feature] for feature in original_feature_names]
-        self.feature_to_group = feature_to_group
+        self.feature_to_group = np.asarray(feature_to_group)
 
 
 if __name__ == "__main__":

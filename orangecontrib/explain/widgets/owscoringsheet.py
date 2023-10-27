@@ -39,8 +39,7 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
 
     class Information(OWBaseLearner.Information):
         ignored_preprocessors = Msg(
-            "This widget has a very specific preprocessing which is currently ignored because of the custom preprocessing input."
-            "The input data for this widget should have binary features and no missing values."
+            "This widget has a very specific preprocessing which could be affected by the inputed preprocessor. "
         )
 
 
@@ -176,6 +175,8 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
     
     def update_model(self):
         self.cancel()
+        self.show_fitting_failed(None)
+        self.model = None
         if self.data is not None:
             self.start(ScoringSheetRunner.run, self.learner, self.data)
         else:
@@ -197,8 +198,10 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
         self.Outputs.model.send(result)
 
     def on_exception(self, ex):
+        self.cancel()
         self.Outputs.model.send(None)
-        raise ex
+        if isinstance(ex, BaseException):
+            self.show_fitting_failed(ex)
 
     def onDeleteWidget(self):
         self.shutdown()
