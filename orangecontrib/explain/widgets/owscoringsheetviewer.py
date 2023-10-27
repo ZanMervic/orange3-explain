@@ -4,7 +4,7 @@ from Orange.widgets.widget import Input, Output, OWWidget, AttributeList, Msg
 from Orange.data import Table
 from Orange.classification import Model
 
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QSlider, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QSlider, QLabel, QVBoxLayout, QWidget, QHBoxLayout
 from PyQt5.QtCore import Qt
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetModel
@@ -12,6 +12,7 @@ from orangecontrib.explain.modeling.scoringsheet import ScoringSheetModel
 from fasterrisk.utils import get_support_indices, get_all_product_booleans
 
 import numpy as np
+
 
 class ScoringSheetTable(QTableWidget):
 
@@ -60,24 +61,25 @@ class ScoringSheetTable(QTableWidget):
             self.blockSignals(False)
             self.main_widget._update_slider_value()
 
-class CustomSlider(QWidget):
-
+class RiskSlider(QWidget):
     def __init__(self, points, probabilities, parent=None):
-        """
-        Initialize the CustomSlider widget. It sets up a layout containing a slider and two labels. 
-        The slider represents points, and the labels display the current point value and corresponding 
-        probability percentage.
-        """
         super().__init__(parent)
         self.layout = QVBoxLayout()
 
-        self.slider = QSlider(Qt.Horizontal, self)
-        self.points_label = QLabel(self)
-        self.probabilities_label = QLabel(self)
+        # Container for the point labels above the slider
+        self.points_container = QWidget(self)
+        self.points_layout = QHBoxLayout(self.points_container)
+        self.layout.addWidget(self.points_container)
 
-        self.layout.addWidget(self.points_label)
+        # Container for the point and probability labels
+        self.slider = QSlider(Qt.Horizontal, self)
+        self.slider.setEnabled(False)
         self.layout.addWidget(self.slider)
-        self.layout.addWidget(self.probabilities_label)
+
+        # Container for probability labels under the slider
+        self.probabilities_container = QWidget(self)
+        self.prob_layout = QHBoxLayout(self.probabilities_container)
+        self.layout.addWidget(self.probabilities_container)
         
         self.setLayout(self.layout)
 
@@ -86,23 +88,39 @@ class CustomSlider(QWidget):
         self.setup_slider()
 
     def setup_slider(self):
-        """
-        Configures the slider's minimum and maximum based on the provided points. It also connects the 
-        slider's valueChanged signal to the update_labels method and initializes the label values.
-        """
         self.slider.setMinimum(0)
         self.slider.setMaximum(len(self.points) - 1 if self.points else 0)
+        self.slider.setTickPosition(QSlider.TicksBothSides)
+        self.slider.setTickInterval(1)  # Set tick interval
 
-        self.slider.valueChanged.connect(self.update_labels)
-        self.update_labels(0)
+        # Clear existing widgets in the points layout
+        for i in reversed(range(self.points_layout.count())):
+            widget = self.points_layout.itemAt(i).widget()
+            if widget is not None:
+                widget.deleteLater()
 
-    def update_labels(self, value):
-        """
-        Updates the labels to display the current point value and corresponding probability percentage 
-        based on the slider's current value.
-        """
-        self.points_label.setText(str(self.points[value]) if self.points else "")
-        self.probabilities_label.setText(str(self.probabilities[value]) + "%" if self.probabilities else "")
+        # Add point labels above the slider for each point
+        for i, point in enumerate(self.points):
+            label = QLabel(str(point) if self.points else "")
+            label.setAlignment(Qt.AlignCenter)
+            self.points_layout.addWidget(label)
+            if i != len(self.points) - 1:
+                self.points_layout.addStretch()
+
+
+        # Clear existing widgets in the probabilities layout
+        for i in reversed(range(self.prob_layout.count())): 
+            widget = self.prob_layout.itemAt(i).widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        # Add probability labels under the slider for each point
+        for i, point in enumerate(self.points):
+            label = QLabel(str(round(self.probabilities[i], 1)) + "%" if self.probabilities else "")
+            label.setAlignment(Qt.AlignCenter)
+            self.prob_layout.addWidget(label)
+            if i != len(self.points) - 1:
+                self.prob_layout.addStretch()  # Add stretch between labels to space them out
 
     def move_to_value(self, value):
         """
@@ -146,10 +164,10 @@ class OWScoringSheetViewer(OWWidget):
         self.controlAreaVisible = False
 
         self.coefficient_table = ScoringSheetTable(main_widget=self, parent=self)
-        gui.widgetBox(self.mainArea, "Coefficients").layout().addWidget(self.coefficient_table)
+        gui.widgetBox(self.mainArea).layout().addWidget(self.coefficient_table)
 
-        self.custom_slider = CustomSlider([], [], self)
-        gui.widgetBox(self.mainArea, "Slider").layout().addWidget(self.custom_slider)
+        self.risk_slider = RiskSlider([], [], self)
+        gui.widgetBox(self.mainArea).layout().addWidget(self.risk_slider)
 
     def _extract_data_from_model(self, classifier):
         """
@@ -213,7 +231,7 @@ class OWScoringSheetViewer(OWWidget):
             for row in range(self.coefficient_table.rowCount())
             if self.coefficient_table.item(row, 3)  # Check if the item exists
         )
-        self.custom_slider.move_to_value(total_coefficient)
+        self.risk_slider.move_to_value(total_coefficient)
 
 
     @Inputs.classifier
@@ -247,9 +265,11 @@ class OWScoringSheetViewer(OWWidget):
         """Populate the scoring sheet based on extracted data."""
         if self.attributes and self.coefficients:
             self.coefficient_table.populate_table(self.attributes, self.coefficients)
-            self.custom_slider.points = self.all_scores
-            self.custom_slider.probabilities = self.all_risks
-            self.custom_slider.setup_slider()
+            
+            # Update points and probabilities in the custom slider
+            self.risk_slider.points = self.all_scores
+            self.risk_slider.probabilities = self.all_risks
+            self.risk_slider.setup_slider()
 
     @Inputs.data #TODO: make this better
     def set_data(self, data):
