@@ -6,16 +6,16 @@ from Orange.classification import Model
 
 from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QSlider, QLabel,
-    QVBoxLayout, QWidget, QHBoxLayout, QGridLayout
+    QVBoxLayout, QWidget, QGridLayout, QStyle
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtGui import QPainter, QFontMetrics
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetModel
 
 from fasterrisk.utils import get_support_indices, get_all_product_booleans
 
 import numpy as np
-
 
 
 
@@ -74,28 +74,25 @@ class ScoringSheetTable(QTableWidget):
 class RiskSlider(QWidget):
     def __init__(self, points, probabilities, parent=None):
         super().__init__(parent)
-        self.layout = QVBoxLayout()
+        self.layout = QVBoxLayout(self)
 
-        # Container for the point labels above the slider
-        self.points_container = QWidget(self)
-        self.points_layout = QHBoxLayout(self.points_container)
-        self.layout.addWidget(self.points_container)
+        # Set the margins for the layout
+        self.leftMargin = 20
+        self.topMargin = 20
+        self.rightMargin = 20
+        self.bottomMargin = 20
+        self.layout.setContentsMargins(self.leftMargin, self.topMargin, self.rightMargin, self.bottomMargin)
 
-        # Container for the point and probability labels
         self.slider = QSlider(Qt.Horizontal, self)
         self.slider.setEnabled(False)
         self.layout.addWidget(self.slider)
 
-        # Container for probability labels under the slider
-        self.probabilities_container = QWidget(self)
-        self.prob_layout = QHBoxLayout(self.probabilities_container)
-        self.layout.addWidget(self.probabilities_container)
-        
-        self.setLayout(self.layout)
-
         self.points = points
         self.probabilities = probabilities
         self.setup_slider()
+
+        # Set the margin for drawing text
+        self.textMargin = 1
 
     def setup_slider(self):
         self.slider.setMinimum(0)
@@ -103,44 +100,44 @@ class RiskSlider(QWidget):
         self.slider.setTickPosition(QSlider.TicksBothSides)
         self.slider.setTickInterval(1)  # Set tick interval
 
-        # Clear existing widgets in the points layout
-        for i in reversed(range(self.points_layout.count())):
-            widget = self.points_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        # Add point labels above the slider for each point
-        for i, point in enumerate(self.points):
-            label = QLabel(str(point) if self.points else "")
-            label.setAlignment(Qt.AlignCenter)
-            self.points_layout.addWidget(label)
-            if i != len(self.points) - 1:
-                self.points_layout.addStretch()
-
-
-        # Clear existing widgets in the probabilities layout
-        for i in reversed(range(self.prob_layout.count())): 
-            widget = self.prob_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        # Add probability labels under the slider for each point
-        for i, point in enumerate(self.points):
-            label = QLabel(str(round(self.probabilities[i], 1)) + "%" if self.probabilities else "")
-            label.setAlignment(Qt.AlignCenter)
-            self.prob_layout.addWidget(label)
-            if i != len(self.points) - 1:
-                self.prob_layout.addStretch()  # Add stretch between labels to space them out
-
     def move_to_value(self, value):
-        """
-        Moves the slider to the position representing the closest point to the given value. If there are no points,
-        the method simply returns without making any changes.
-        """
         if not self.points:
             return
         closest_point_index = min(range(len(self.points)), key=lambda i: abs(self.points[i]-value))
         self.slider.setValue(closest_point_index)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        if not self.points:
+            return
+
+        painter = QPainter(self)
+        fm = QFontMetrics(painter.font())
+
+        for i, point in enumerate(self.points):
+            # Calculate the x position of the tick mark
+            x_pos = QStyle.sliderPositionFromValue(self.slider.minimum(),
+                                                self.slider.maximum(), i, 
+                                                self.slider.width()) + self.slider.x()
+
+            # Draw the point label above the tick mark
+            point_str = str(point)
+            point_rect = fm.boundingRect(point_str)
+            point_x = int(x_pos - point_rect.width() / 2)
+            point_y = int(self.slider.y() - self.textMargin - point_rect.height())
+            painter.drawText(QRect(point_x, point_y, point_rect.width(), point_rect.height()), Qt.AlignCenter, point_str)
+
+            # Draw the probability label below the tick mark
+            prob_str = str(round(self.probabilities[i], 1)) + "%"
+            prob_rect = fm.boundingRect(prob_str)
+            prob_x = int(x_pos - prob_rect.width() / 2)
+            prob_y = int(self.slider.y() + self.slider.height() + self.textMargin)
+            painter.drawText(QRect(prob_x, prob_y, prob_rect.width(), prob_rect.height()), Qt.AlignCenter, prob_str)
+
+        painter.end()
+
+
 
 
 
@@ -347,8 +344,3 @@ if __name__ == "__main__":
     learner = ScoringSheetLearner(20, 5, 5, None)
     model = learner(data)
     WidgetPreview(OWScoringSheetViewer).run(set_classifier = model)
-
-        
-        
-
-        
