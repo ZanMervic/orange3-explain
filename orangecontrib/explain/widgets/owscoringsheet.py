@@ -52,6 +52,12 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
     custom_features_checkbox = Setting(False)
     num_input_features = Setting(1)
 
+    # Warning messages
+    class Information(OWBaseLearner.Information):
+        custom_number_of_input_features_used = Msg(
+            "If the number of input features used is too low for the number of decision parameters, \n"
+            "the number of decision parameters will be adjusted to fit the model.")
+
     def __init__(self):
         ConcurrentWidgetMixin.__init__(self)
         OWBaseLearner.__init__(self)
@@ -151,7 +157,15 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
 
 
     def custom_input_features(self):
+        """
+        Enable or disable the custom input features spinbox based on the value of the custom_features_checkbox.
+        Also, add or remove the Information message about the number of input features.
+        """
         self.custom_features.setEnabled(self.custom_features_checkbox)
+        if self.custom_features_checkbox:
+            self.Information.custom_number_of_input_features_used()
+        else:
+            self.Information.custom_number_of_input_features_used.clear()
         self.apply()
 
 

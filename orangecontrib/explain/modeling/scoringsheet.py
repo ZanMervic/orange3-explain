@@ -32,7 +32,6 @@ class ScoringSheetModel(Model):
 
 
 
-
 class ScoringSheetLearner(Learner):
 
     __returns__ = ScoringSheetModel
@@ -64,7 +63,9 @@ class ScoringSheetLearner(Learner):
             group_sparsity = self.num_input_features,
             featureIndex_to_groupIndex = self.feature_to_group,
         )
-        learner.optimize()
+
+        self._optimize_decision_params_adjustment(learner)
+
         multipliers, intercepts, coefficients = learner.get_models()
 
         model = RiskScoreClassifier(
@@ -77,6 +78,23 @@ class ScoringSheetLearner(Learner):
         return ScoringSheetModel(model)
 
 
+    def _optimize_decision_params_adjustment(self, learner):
+        """
+        Sometimes, the number of decision parameters is too high for the 
+        number of input features. Which results in a ValueError.
+    
+        This function attempts to optimize (fit) the learner, reducing the number of decision parameters ('k') 
+        if optimization fails due to being too high. Continues until successful or 'k' cannot be reduced further.
+        """
+        while True:
+            try:
+                learner.optimize()
+                return True
+            except ValueError as e:
+                learner.k -= 1
+                if learner.k < 1:
+                    # Raise a custom error when k falls below 1
+                    raise ValueError("The number of input features is too low for the current settings.")
 
 
     def _generate_feature_group_index(self, table):
