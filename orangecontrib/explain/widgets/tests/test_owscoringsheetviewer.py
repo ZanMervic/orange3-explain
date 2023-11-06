@@ -1,23 +1,11 @@
-# pylint: disable=missing-docstring,protected-access,invalid-name
-import inspect
-import itertools
 import unittest
 
-import numpy as np
 
-from AnyQt.QtCore import Qt, QPoint
-from AnyQt.QtGui import QFont
-from AnyQt.QtTest import QTest
-from AnyQt.QtWidgets import QGraphicsGridLayout
+from AnyQt.QtCore import Qt
 
-import pyqtgraph as pg
-
-from orangecanvas.gui.test import mouseMove
 from orangewidget.tests.base import WidgetTest
 
-import Orange
-from Orange.base import Learner
-from Orange.data import Table, Domain, ContinuousVariable
+from Orange.data import Table
 from Orange.widgets.widget import AttributeList
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
@@ -35,8 +23,17 @@ class TestOWScoringSheetViewer(WidgetTest):
     def setUp(self):
         self.widget = self.create_widget(OWScoringSheetViewer)
 
-    def test_no_classifier_output(self):
-        self.assertIsNone(self.get_output(self.widget.Outputs.features))
+    def test_no_classifier_input(self):
+        coef_table = self.widget.coefficient_table
+        risk_slider = self.widget.risk_slider
+        class_combo = self.widget.class_combo
+
+        self.assertEqual(coef_table.rowCount(), 0)
+        self.assertEqual(risk_slider.slider.value(), 0)
+        self.assertEqual(class_combo.count(), 0)
+
+    # def test_no_classifier_output(self):
+    #     self.assertIsNone(self.get_output(self.widget.Outputs.features))
 
     def test_classifier_output(self):
         self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
@@ -62,7 +59,6 @@ class TestOWScoringSheetViewer(WidgetTest):
 
     def test_collected_points_update_on_checkbox_toggle(self):
         self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
-        self.wait_until_finished()
         coef_table = self.widget.coefficient_table
         
         # Get the items in the first row of the table
@@ -94,7 +90,6 @@ class TestOWScoringSheetViewer(WidgetTest):
 
     def test_slider_update_on_checkbox_toggle(self):
         self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
-        self.wait_until_finished()
 
         coef_table = self.widget.coefficient_table
         risk_slider = self.widget.risk_slider
@@ -121,6 +116,29 @@ class TestOWScoringSheetViewer(WidgetTest):
 
         # Check if the slider value is "0" again
         self.assertEqual(risk_slider.slider.value(), risk_slider_points.index(0))
+
+    def test_target_class_change(self):
+        self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
+        self.class_combo = self.widget.class_combo
+
+        # Check if the values of the combobox "match" the domain
+        self.assertEqual(self.class_combo.count(), len(self.scoring_sheet_model.domain.class_var.values))
+        for i in range(self.class_combo.count()):
+            self.assertEqual(self.class_combo.itemText(i), self.scoring_sheet_model.domain.class_var.values[i])
+
+        old_coefficients = self.widget.coefficients.copy()
+        old_all_scores = self.widget.all_scores.copy()
+        old_all_risks = self.widget.all_risks.copy()
+
+        # Change the target class to the second class
+        self.class_combo.setCurrentIndex(1)
+        self.widget._class_combo_changed()
+
+        # Check if the coefficients, scores, and risks have changed
+        self.assertNotEqual(old_coefficients, self.widget.coefficients)
+        self.assertNotEqual(old_all_scores, self.widget.all_scores)
+        self.assertNotEqual(old_all_risks, self.widget.all_risks)
+
 
 
     # def test_collected_points_update_on_checkbox_toggle_gui(self):

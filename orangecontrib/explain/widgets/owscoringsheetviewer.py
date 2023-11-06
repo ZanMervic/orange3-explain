@@ -1,10 +1,13 @@
 from Orange.widgets import gui
-from Orange.widgets.settings import ContextSetting, DomainContextHandler, Setting
+from Orange.widgets.settings import ContextSetting
 from Orange.widgets.widget import Input, Output, OWWidget, AttributeList, Msg
 from Orange.data import Table
 from Orange.classification import Model
 
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QSlider, QLabel, QVBoxLayout, QWidget, QHBoxLayout
+from PyQt5.QtWidgets import (
+    QTableWidget, QTableWidgetItem, QSlider, QLabel,
+    QVBoxLayout, QWidget, QHBoxLayout, QGridLayout
+)
 from PyQt5.QtCore import Qt
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetModel
@@ -12,6 +15,9 @@ from orangecontrib.explain.modeling.scoringsheet import ScoringSheetModel
 from fasterrisk.utils import get_support_indices, get_all_product_booleans
 
 import numpy as np
+
+
+
 
 
 class ScoringSheetTable(QTableWidget):
@@ -60,6 +66,10 @@ class ScoringSheetTable(QTableWidget):
                 self.setItem(row, 3, QTableWidgetItem('0'))
             self.blockSignals(False)
             self.main_widget._update_slider_value()
+
+
+
+
 
 class RiskSlider(QWidget):
     def __init__(self, points, probabilities, parent=None):
@@ -132,6 +142,10 @@ class RiskSlider(QWidget):
         closest_point_index = min(range(len(self.points)), key=lambda i: abs(self.points[i]-value))
         self.slider.setValue(closest_point_index)
 
+
+
+
+
 class OWScoringSheetViewer(OWWidget):
     """
     Allows visualization of the scoring sheet model.
@@ -160,14 +174,98 @@ class OWScoringSheetViewer(OWWidget):
         self.attributes = None
         self.all_scores = None
         self.all_risks = None
+        self.domain = None
+        self.old_target_class_index = self.target_class_index
 
-        self.controlAreaVisible = False
+        # Control Area Layout
+        grid = QGridLayout()
+        self.class_combo = gui.comboBox(
+            None, self, "target_class_index", callback=self._class_combo_changed
+        )
+        grid.addWidget(QLabel("Target class:"), 0, 0)
+        grid.addWidget(self.class_combo, 0, 1)
+        gui.widgetBox(self.controlArea, orientation=grid)
+        self.controlArea.layout().addStretch()
 
+        # Main Area Layout
         self.coefficient_table = ScoringSheetTable(main_widget=self, parent=self)
         gui.widgetBox(self.mainArea).layout().addWidget(self.coefficient_table)
 
         self.risk_slider = RiskSlider([], [], self)
         gui.widgetBox(self.mainArea).layout().addWidget(self.risk_slider)
+
+
+    # GUI Methods -------------------------------------------------------------------------------------
+
+    def _populate_interface(self):
+        """Populate the scoring sheet based on extracted data."""
+        if self.attributes and self.coefficients:
+            self.coefficient_table.populate_table(self.attributes, self.coefficients)
+            
+            # Update points and probabilities in the custom slider
+            self.risk_slider.points = self.all_scores
+            self.risk_slider.probabilities = self.all_risks
+            self.risk_slider.setup_slider()
+
+    def _update_slider_value(self):
+        """
+        This method is called when the user changes the state of the checkbox in the coefficient table.
+        It updates the slider value to reflect the total points collected.
+        """
+        if not self.coefficient_table:
+            return
+        total_coefficient = sum(
+            float(self.coefficient_table.item(row, 3).text()) 
+            for row in range(self.coefficient_table.rowCount())
+            if self.coefficient_table.item(row, 3)  # Check if the item exists
+        )
+        self.risk_slider.move_to_value(total_coefficient)
+
+    def _update_controls(self):
+        """
+        This method is called when the user changes the classifier or the target class.
+        It updates the interface components based on the extracted data.
+        """
+        self._populate_interface()
+        self._update_slider_value()
+        self.class_combo.clear()
+        if self.domain is not None:
+            values = self.domain.class_vars[0].values
+            if values:
+                self.class_combo.addItems(values)
+                self.class_combo.setCurrentIndex(self.target_class_index)
+
+
+    def _class_combo_changed(self):
+        """
+        This method is called when the user changes the target class.
+        It updates the interface components based on the selected class.
+        """
+        self.target_class_index = self.class_combo.currentIndex()
+        if self.target_class_index == self.old_target_class_index:
+            return
+        self.old_target_class_index = self.target_class_index
+        self._adjust_for_target_class()
+        self._update_controls()
+    
+
+    def _adjust_for_target_class(self):
+        """
+        Adjusts the coefficients, scores, and risks for the negative/positive class.
+        This allows user to select the target class and see the corresponding coefficients, scores, and risks.
+        """
+        # Negate the coefficients
+        self.coefficients = [-coef for coef in self.coefficients]
+        # Negate the scores
+        self.all_scores = [-score for score in self.all_scores]
+        self.all_scores.sort()
+        # Adjust the risks
+        self.all_risks = [100 - risk for risk in self.all_risks]
+        self.all_risks.sort()
+
+
+    # Input Methods -----------------------------------------------------------------------------------
+
 
     def _extract_data_from_model(self, classifier):
         """
@@ -205,45 +303,7 @@ class OWScoringSheetViewer(OWWidget):
         self.coefficients = coefficients
         self.all_scores = all_scores.tolist()
         self.all_risks = (all_risks * 100).tolist()
-
-    def _adjust_for_target_class(self):
-        """
-        Adjusts the coefficients, scores, and risks for the negative/positive class.
-        This allows user to select the target class and see the corresponding coefficients, scores, and risks.
-        """
-        # Negate the coefficients
-        self.coefficients = [-coef for coef in self.coefficients]
-        # Negate the scores
-        self.all_scores = [-score for score in self.all_scores]
-        # Adjust the risks
-        self.all_risks = [100 - risk for risk in self.all_risks]
-
-
-    def _update_slider_value(self):
-        """
-        This method is called when the user changes the state of the checkbox in the coefficient table.
-        It updates the slider value to reflect the total points collected.
-        """
-        if not self.coefficient_table:
-            return
-        total_coefficient = sum(
-            float(self.coefficient_table.item(row, 3).text()) 
-            for row in range(self.coefficient_table.rowCount())
-            if self.coefficient_table.item(row, 3)  # Check if the item exists
-        )
-        self.risk_slider.move_to_value(total_coefficient)
-
-
-    @Inputs.classifier
-    def set_classifier(self, classifier):
-        if not classifier or not self._is_valid_classifier(classifier):
-            self._clear_classifier_data()
-            return
-
-        self.classifier = classifier
-        self._extract_data_from_model(classifier)
-        self._populate_interface()
-        self._update_slider_value()
+        self.domain = classifier.domain
 
     def _is_valid_classifier(self, classifier):
         """Check if the classifier is a valid ScoringSheetModel."""
@@ -261,15 +321,16 @@ class OWScoringSheetViewer(OWWidget):
         self.classifier = None
         self.Outputs.features.send(None)
 
-    def _populate_interface(self):
-        """Populate the scoring sheet based on extracted data."""
-        if self.attributes and self.coefficients:
-            self.coefficient_table.populate_table(self.attributes, self.coefficients)
-            
-            # Update points and probabilities in the custom slider
-            self.risk_slider.points = self.all_scores
-            self.risk_slider.probabilities = self.all_risks
-            self.risk_slider.setup_slider()
+
+    @Inputs.classifier
+    def set_classifier(self, classifier):
+        if not classifier or not self._is_valid_classifier(classifier):
+            self._clear_classifier_data()
+            return
+
+        self.classifier = classifier
+        self._extract_data_from_model(classifier)
+        self._update_controls()
 
     @Inputs.data #TODO: make this better
     def set_data(self, data):
@@ -283,7 +344,7 @@ if __name__ == "__main__":
     from Orange.data import Table
     from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
     data = Table("heart_disease")
-    learner = ScoringSheetLearner(20, 5, 10, None)
+    learner = ScoringSheetLearner(20, 5, 5, None)
     model = learner(data)
     WidgetPreview(OWScoringSheetViewer).run(set_classifier = model)
 
