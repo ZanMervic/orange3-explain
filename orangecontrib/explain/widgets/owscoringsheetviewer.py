@@ -3,10 +3,11 @@ from Orange.widgets.settings import ContextSetting
 from Orange.widgets.widget import Input, Output, OWWidget, AttributeList, Msg
 from Orange.data import Table
 from Orange.classification import Model
+from PyQt5 import QtGui
 
 from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QSlider, QLabel,
-    QVBoxLayout, QWidget, QGridLayout, QStyle
+    QVBoxLayout, QWidget, QGridLayout, QStyle, QToolTip, QStyleOptionSlider
 )
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QPainter, QFontMetrics
@@ -83,6 +84,7 @@ class RiskSlider(QWidget):
         self.bottomMargin = 20
         self.layout.setContentsMargins(self.leftMargin, self.topMargin, self.rightMargin, self.bottomMargin)
 
+        # Create the slider
         self.slider = QSlider(Qt.Horizontal, self)
         self.slider.setEnabled(False)
         self.layout.addWidget(self.slider)
@@ -94,19 +96,34 @@ class RiskSlider(QWidget):
         # Set the margin for drawing text
         self.textMargin = 1
 
+        # This is needed to show the tooltip when the mouse is over the slider thumb
+        self.slider.installEventFilter(self)
+        self.setMouseTracking(True)
+        self.target_class = None
+
     def setup_slider(self):
+        """
+        Set up the slider with the given points and probabilities. 
+        It sets the minimum and maximum values (of the indexes for the ticks) of the slider
+        """
         self.slider.setMinimum(0)
         self.slider.setMaximum(len(self.points) - 1 if self.points else 0)
         self.slider.setTickPosition(QSlider.TicksBothSides)
         self.slider.setTickInterval(1)  # Set tick interval
 
     def move_to_value(self, value):
+        """
+        Move the slider to the closest tick mark to the given value.
+        """
         if not self.points:
             return
         closest_point_index = min(range(len(self.points)), key=lambda i: abs(self.points[i]-value))
         self.slider.setValue(closest_point_index)
 
     def paintEvent(self, event):
+        """
+        Paint the point and probabilitie labels above and below the tick marks respectively.
+        """
         super().paintEvent(event)
 
         if not self.points:
@@ -137,8 +154,58 @@ class RiskSlider(QWidget):
 
         painter.end()
 
+    def eventFilter(self, watched, event):
+        """
+        Event filter to intercept hover events on the slider.
+        This is needed to show the tooltip when the mouse is over the slider thumb.
+        """
+        if watched == self.slider and isinstance(event, QtGui.QHoverEvent):
+            # Handle the hover event when it's over the slider
+            self.handle_hover_event(event.pos())
+            return True
+        else:
+            # Call the base class method to continue default event processing
+            return super().eventFilter(watched, event)
+
+    def handle_hover_event(self, pos):
+        """
+        Handle hover events for the slider. Display the tooltip when the mouse is over the slider thumb.
+        """
+        thumbRect = self.get_thumb_rect()  # This is a method from QSlider that gives you the thumb rect
+        if thumbRect.contains(pos):
+            value = self.slider.value()
+            points = self.points[value]
+            probability = self.probabilities[value]
+            tooltip = str(
+                f"<b>Target Class: {self.target_class}</b>\n "
+                f"<hr style='margin: 0px; padding: 0px; border: 0px; height: 1px; background-color: #000000'>"
+                f"<b>Points:</b> {int(points)}<br>"
+                f"<b>Probability:</b> {probability:.1f}%"
+            )
+            QToolTip.showText(self.slider.mapToGlobal(pos), tooltip)
+        else:
+            QToolTip.hideText()
 
 
+    def get_thumb_rect(self):
+        """
+        Get the rectangle of the slider thumb.
+        """
+        opt = QStyleOptionSlider()
+        self.slider.initStyleOption(opt)
+
+        style = self.slider.style()
+
+        # Get the area of the slider that contains the handle
+        handle_rect = style.subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, self.slider)
+
+        # Calculate the position and size of the thumb
+        thumb_x = handle_rect.x()
+        thumb_y = handle_rect.y()
+        thumb_width = handle_rect.width()
+        thumb_height = handle_rect.height()
+
+        return QRect(thumb_x, thumb_y, thumb_width, thumb_height)
 
 
 
@@ -202,7 +269,9 @@ class OWScoringSheetViewer(OWWidget):
             # Update points and probabilities in the custom slider
             self.risk_slider.points = self.all_scores
             self.risk_slider.probabilities = self.all_risks
+            self.risk_slider.target_class = f"{self.domain.class_vars[0].name} = {self.domain.class_vars[0].values[self.target_class_index]}"
             self.risk_slider.setup_slider()
+            self.risk_slider.update()
 
     def _update_slider_value(self):
         """
