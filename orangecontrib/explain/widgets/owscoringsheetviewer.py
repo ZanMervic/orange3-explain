@@ -264,9 +264,14 @@ class OWScoringSheetViewer(OWWidget):
     class Error(OWWidget.Error):
         invalid_classifier = Msg("Scoring Sheet Viewer only accepts a Scoring Sheet model.")
 
+    class Information(OWWidget.Information):
+        multiple_instances = Msg("The input data contains multiple instances. Only the first instance will be used.")
+
     def __init__(self):
         super().__init__()
         self.data = None
+        self.instance = None
+        self.instance_points = []
         self.classifier = None
         self.coefficients = None
         self.attributes = None
@@ -323,18 +328,35 @@ class OWScoringSheetViewer(OWWidget):
 
     def _update_controls(self):
         """
-        This method is called when the user changes the classifier or the target class.
+        This method is called when the user inputs data, changes the classifier or the target class.
         It updates the interface components based on the extracted data.
         """
+        if self.classifier is None:
+            self.coefficient_table.setHidden(True)
+            self.risk_slider.setHidden(True)
+            self.class_combo.clear()
+            return
+        
+        self.coefficient_table.setHidden(False)
+        self.risk_slider.setHidden(False)
+
         self._populate_interface()
         self._update_slider_value()
+        self._setup_class_combo()
+        self._set_instance_points()
+
+    # Class Combo Methods -----------------------------------------------------------------------------
+
+    def _setup_class_combo(self):
+        """
+        This method is used to populate the class combo box with the target classes.
+        """
         self.class_combo.clear()
         if self.domain is not None:
             values = self.domain.class_vars[0].values
             if values:
                 self.class_combo.addItems(values)
                 self.class_combo.setCurrentIndex(self.target_class_index)
-
 
     def _class_combo_changed(self):
         """
@@ -345,6 +367,7 @@ class OWScoringSheetViewer(OWWidget):
         if self.target_class_index == self.old_target_class_index:
             return
         self.old_target_class_index = self.target_class_index
+
         self._adjust_for_target_class()
         self._update_controls()
     
@@ -364,7 +387,7 @@ class OWScoringSheetViewer(OWWidget):
         self.all_risks.sort()
 
 
-    # Input Methods -----------------------------------------------------------------------------------
+    # Classifier Input Methods -----------------------------------------------------------------------------------
 
 
     def _extract_data_from_model(self, classifier):
@@ -419,11 +442,54 @@ class OWScoringSheetViewer(OWWidget):
         self.all_scores = None
         self.all_risks = None
         self.classifier = None
+        self._update_controls()
         self.Outputs.features.send(None)
 
+    # Data Input Methods -----------------------------------------------------------------------------------
+
+    def _clear_table_data(self):
+        """Clear data and associated interface components."""
+        self.data = None
+        self.instance = None
+        self.instance_points = []
+        self._set_table_checkboxes()
+
+    def _set_instance_points(self):
+        """
+        Initializes the instance and its points and sets the checkboxes in the coefficient table.
+        """
+        if self.data and self.domain is not None:
+            self._init_instance_points()
+
+        self._set_table_checkboxes()
+
+
+    def _set_table_checkboxes(self):
+        """
+        Sets the checkboxes in the coefficient table based on the instance points.
+        Or clears the checkboxes if the instance points are not initialized.
+        """
+        for row in range(self.coefficient_table.rowCount()):
+            if self.instance_points and self.instance_points[row] != 0:
+                self.coefficient_table.item(row, 2).setCheckState(Qt.Checked)
+            else:
+                self.coefficient_table.item(row, 2).setCheckState(Qt.Unchecked)
+        
+        
+    def _init_instance_points(self):
+        """
+        Initialize the instance which is used to show the points collected for each attribute.
+        Get the values of the features for the instance and store them in a list.
+        """
+        instances = self.data.transform(self.domain)
+        self.instance = instances[0]
+        self.instance_points = [self.instance.list[i] for i in get_support_indices(self.classifier.model.coefficients)]
+
+    # Input Methods -----------------------------------------------------------------------------------
 
     @Inputs.classifier
     def set_classifier(self, classifier):
+        self.Error.invalid_classifier.clear()
         if not classifier or not self._is_valid_classifier(classifier):
             self._clear_classifier_data()
             return
@@ -431,12 +497,19 @@ class OWScoringSheetViewer(OWWidget):
         self.classifier = classifier
         self._extract_data_from_model(classifier)
         self._update_controls()
+        # TODO: Output the features
 
-    @Inputs.data #TODO: make this better
+    @Inputs.data
     def set_data(self, data):
-        # self.closeContext()
+        self.Information.multiple_instances.clear()
+        if not data or len(data) < 1:
+            self._clear_table_data()
+            return
+
         self.data = data
-        self.Outputs.features.send(None)
+        if len(data) > 1:
+            self.Information.multiple_instances()
+        self._update_controls()
 
 
 if __name__ == "__main__":
@@ -444,6 +517,6 @@ if __name__ == "__main__":
     from Orange.data import Table
     from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
     data = Table("heart_disease")
-    learner = ScoringSheetLearner(20, 5, 5, None)
+    learner = ScoringSheetLearner(15, 5, 5, None)
     model = learner(data)
-    WidgetPreview(OWScoringSheetViewer).run(set_classifier = model)
+    WidgetPreview(OWScoringSheetViewer).run(set_classifier = model, set_data = data)
