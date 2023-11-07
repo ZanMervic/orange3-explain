@@ -72,7 +72,8 @@ class ScoringSheetLearner(Learner):
             multiplier=multipliers[0],
             intercept=intercepts[0],
             coefficients=coefficients[0],
-            featureNames=[attribute.name for attribute in table.domain.attributes]
+            featureNames=[attribute.name for attribute in table.domain.attributes],
+            X_train = X if self.num_decision_params > 10 else None,
         )
 
         return ScoringSheetModel(model)

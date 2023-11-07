@@ -6,8 +6,8 @@ from Orange.classification import Model
 from PyQt5 import QtGui
 
 from PyQt5.QtWidgets import (
-    QTableWidget, QTableWidgetItem, QSlider, QLabel,
-    QVBoxLayout, QWidget, QGridLayout, QStyle, QToolTip, QStyleOptionSlider
+    QTableWidget, QTableWidgetItem, QSlider, QLabel, QVBoxLayout,
+    QHBoxLayout, QWidget, QGridLayout, QStyle, QToolTip, QStyleOptionSlider
 )
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QPainter, QFontMetrics
@@ -51,6 +51,16 @@ class ScoringSheetTable(QTableWidget):
             self.setItem(i, 2, checkbox)
 
             self.setItem(i, 3, QTableWidgetItem('0'))
+        
+        # Resize columns to fit the contents
+        self.resize_columns_to_contents()
+
+    def resize_columns_to_contents(self):
+        """
+        Resize each column to fit the content.
+        """
+        for column in range(self.columnCount()):
+            self.resizeColumnToContents(column)
 
     def handle_item_changed(self, item):
         """
@@ -75,7 +85,7 @@ class ScoringSheetTable(QTableWidget):
 class RiskSlider(QWidget):
     def __init__(self, points, probabilities, parent=None):
         super().__init__(parent)
-        self.layout = QVBoxLayout(self)
+        self.layout = QHBoxLayout(self)
 
         # Set the margins for the layout
         self.leftMargin = 20
@@ -83,6 +93,9 @@ class RiskSlider(QWidget):
         self.rightMargin = 20
         self.bottomMargin = 20
         self.layout.setContentsMargins(self.leftMargin, self.topMargin, self.rightMargin, self.bottomMargin)
+
+        # Setup the labels
+        self.setup_labels()
 
         # Create the slider
         self.slider = QSlider(Qt.Horizontal, self)
@@ -101,10 +114,31 @@ class RiskSlider(QWidget):
         self.setMouseTracking(True)
         self.target_class = None
 
+    def setup_labels(self):
+        """
+        Set up the labels for the slider. 
+        It creates a vertical layout for the labels and adds it to the main layout.
+        It is only called once when the widget is initialized.
+        """
+        # Create the labels for the slider
+        self.label_layout = QVBoxLayout()
+        # Add the label for the points "Points:"
+        self.points_label = QLabel("<b>Total:</b>")
+        self.label_layout.addWidget(self.points_label)
+        # Add stretch to the label layout
+        self.label_layout.addSpacing(23)
+        # Add the label for the probability "Probability:"
+        self.probability_label = QLabel("<b>Probabilities (%):</b>")
+        self.label_layout.addWidget(self.probability_label)
+        self.layout.addLayout(self.label_layout)
+        # Add a spacer
+        self.layout.addSpacing(28)
+
     def setup_slider(self):
         """
         Set up the slider with the given points and probabilities. 
-        It sets the minimum and maximum values (of the indexes for the ticks) of the slider
+        It sets the minimum and maximum values (of the indexes for the ticks) of the slider.
+        It is called when the points and probabilities are updated.
         """
         self.slider.setMinimum(0)
         self.slider.setMaximum(len(self.points) - 1 if self.points else 0)
@@ -323,7 +357,7 @@ class OWScoringSheetViewer(OWWidget):
         # Negate the coefficients
         self.coefficients = [-coef for coef in self.coefficients]
         # Negate the scores
-        self.all_scores = [-score for score in self.all_scores]
+        self.all_scores = [-score if score != 0 else score for score in self.all_scores]
         self.all_scores.sort()
         # Adjust the risks
         self.all_risks = [100 - risk for risk in self.all_risks]
