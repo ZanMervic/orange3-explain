@@ -206,7 +206,7 @@ class RiskSlider(QWidget):
         Handle hover events for the slider. Display the tooltip when the mouse is over the slider thumb.
         """
         thumbRect = self.get_thumb_rect()  # This is a method from QSlider that gives you the thumb rect
-        if thumbRect.contains(pos):
+        if thumbRect.contains(pos) and self.points:
             value = self.slider.value()
             points = self.points[value]
             probability = self.probabilities[value]
@@ -280,6 +280,12 @@ class OWScoringSheetViewer(OWWidget):
         self.domain = None
         self.old_target_class_index = self.target_class_index
 
+        self._setup_gui()
+
+
+    # GUI Methods -------------------------------------------------------------------------------------
+
+    def _setup_gui(self):
         # Control Area Layout
         grid = QGridLayout()
         self.class_combo = gui.comboBox(
@@ -297,8 +303,23 @@ class OWScoringSheetViewer(OWWidget):
         self.risk_slider = RiskSlider([], [], self)
         gui.widgetBox(self.mainArea).layout().addWidget(self.risk_slider)
 
+    def _reset_ui_to_original_state(self):
+        """
+        Reset all UI components to their original state.
+        """
+        # Reset the coefficient table
+        self.coefficient_table.clearContents()
+        self.coefficient_table.setRowCount(0)
 
-    # GUI Methods -------------------------------------------------------------------------------------
+        # Reset the risk slider
+        self.risk_slider.slider.setValue(0)
+        self.risk_slider.points = []
+        self.risk_slider.probabilities = []
+        self.risk_slider.setup_slider()
+        self.risk_slider.update()
+
+        # Reset class combo box
+        self.class_combo.clear()
 
     def _populate_interface(self):
         """Populate the scoring sheet based on extracted data."""
@@ -331,15 +352,6 @@ class OWScoringSheetViewer(OWWidget):
         This method is called when the user inputs data, changes the classifier or the target class.
         It updates the interface components based on the extracted data.
         """
-        if self.classifier is None:
-            self.coefficient_table.setHidden(True)
-            self.risk_slider.setHidden(True)
-            self.class_combo.clear()
-            return
-        
-        self.coefficient_table.setHidden(False)
-        self.risk_slider.setHidden(False)
-
         self._populate_interface()
         self._update_slider_value()
         self._setup_class_combo()
@@ -442,7 +454,6 @@ class OWScoringSheetViewer(OWWidget):
         self.all_scores = None
         self.all_risks = None
         self.classifier = None
-        self._update_controls()
         self.Outputs.features.send(None)
 
     # Data Input Methods -----------------------------------------------------------------------------------
@@ -492,12 +503,16 @@ class OWScoringSheetViewer(OWWidget):
         self.Error.invalid_classifier.clear()
         if not classifier or not self._is_valid_classifier(classifier):
             self._clear_classifier_data()
+            self._reset_ui_to_original_state()
             return
 
         self.classifier = classifier
         self._extract_data_from_model(classifier)
         self._update_controls()
-        # TODO: Output the features
+        # Output the features
+        self.Outputs.features.send(
+            AttributeList([feature for feature in self.domain if feature.name in self.attributes])
+        )
 
     @Inputs.data
     def set_data(self, data):

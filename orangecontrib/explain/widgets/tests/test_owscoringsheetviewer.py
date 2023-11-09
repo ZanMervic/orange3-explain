@@ -2,11 +2,15 @@ import unittest
 
 
 from AnyQt.QtCore import Qt
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QToolTip
 
 from orangewidget.tests.base import WidgetTest
 
 from Orange.data import Table
 from Orange.widgets.widget import AttributeList
+
+from Orange.classification.logistic_regression import LogisticRegressionLearner
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
 from orangecontrib.explain.widgets.owscoringsheetviewer import OWScoringSheetViewer
@@ -19,6 +23,8 @@ class TestOWScoringSheetViewer(WidgetTest):
         cls.heart = Table("heart_disease")
         cls.scoring_sheet_learner = ScoringSheetLearner(20, 5, 5, None)
         cls.scoring_sheet_model = cls.scoring_sheet_learner(cls.heart)
+        cls.logistic_regression_learner = LogisticRegressionLearner(tol=1)
+        cls.logistic_regression_model = cls.logistic_regression_learner(cls.heart[:10])
 
     def setUp(self):
         self.widget = self.create_widget(OWScoringSheetViewer)
@@ -32,14 +38,17 @@ class TestOWScoringSheetViewer(WidgetTest):
         self.assertEqual(risk_slider.slider.value(), 0)
         self.assertEqual(class_combo.count(), 0)
 
-    # def test_no_classifier_output(self):
-    #     self.assertIsNone(self.get_output(self.widget.Outputs.features))
+    def test_no_classifier_output(self):
+        self.assertIsNone(self.get_output(self.widget.Outputs.features))
+        self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
+        self.send_signal(self.widget.Inputs.classifier, None)
+        self.assertIsNone(self.get_output(self.widget.Outputs.features))
 
     def test_classifier_output(self):
         self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
         output = self.get_output(self.widget.Outputs.features)
         self.assertIsInstance(output, AttributeList)
-        self.assertEqual(len(output), self.scoring_sheet_model.num_decision_params)
+        self.assertEqual(len(output), self.scoring_sheet_learner.num_decision_params)
 
     def test_table_population_on_model_input(self):
         self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
@@ -139,6 +148,76 @@ class TestOWScoringSheetViewer(WidgetTest):
         self.assertNotEqual(old_all_scores, self.widget.all_scores)
         self.assertNotEqual(old_all_risks, self.widget.all_risks)
 
+
+    def test_invalid_classifier_error(self):
+        self.send_signal(self.widget.Inputs.classifier, self.logistic_regression_model)
+        self.assertTrue(self.widget.Error.invalid_classifier.is_shown())
+        self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
+        self.assertFalse(self.widget.Error.invalid_classifier.is_shown())
+
+    def test_multiple_instances_information(self):
+        self.send_signal(self.widget.Inputs.data, self.heart[:2])
+        self.assertTrue(self.widget.Information.multiple_instances.is_shown())
+        self.send_signal(self.widget.Inputs.data, self.heart[:1])
+        self.assertFalse(self.widget.Information.multiple_instances.is_shown())
+
+    def _get_checkbox_states(self, coef_table):
+        for row in range(coef_table.rowCount()):
+            if self.widget.instance_points[row] == 1:
+                self.assertEqual(coef_table.item(row, 2).checkState(), Qt.Checked)
+            else:
+                self.assertEqual(coef_table.item(row, 2).checkState(), Qt.Unchecked)
+
+    def test_checkbox_after_instance_input(self):
+        self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
+        self.send_signal(self.widget.Inputs.data, self.heart[:1])
+        coef_table = self.widget.coefficient_table
+        self._get_checkbox_states(coef_table)
+        self.send_signal(self.widget.Inputs.data, self.heart[1:2])
+        self._get_checkbox_states(coef_table)
+
+    def test_no_classifier_UI(self):
+        coef_table = self.widget.coefficient_table
+        risk_slider = self.widget.risk_slider
+        class_combo = self.widget.class_combo
+
+        self.assertEqual(coef_table.rowCount(), 0)
+        self.assertEqual(risk_slider.points, [])
+        self.assertEqual(class_combo.count(), 0)
+
+        self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
+
+        self.assertEqual(coef_table.rowCount(), self.scoring_sheet_learner.num_decision_params)
+        self.assertIsNotNone(risk_slider.points)
+        self.assertEqual(class_combo.count(), len(self.scoring_sheet_model.domain.class_var.values))
+
+        self.send_signal(self.widget.Inputs.classifier, None)
+
+        self.assertEqual(coef_table.rowCount(), 0)
+        self.assertEqual(risk_slider.points, [])
+        self.assertEqual(class_combo.count(), 0)
+
+
+    # TODO: Unittests with GUI interaction
+
+
+    # def test_tooltip_shown_on_hover(self):
+    #     self.send_signal(self.widget.Inputs.classifier, self.scoring_sheet_model)
+    #     self.wait_until_finished()
+
+    #     slider = self.widget.risk_slider
+
+    #     # Get the thumb rect
+    #     thumb_rect = slider.get_thumb_rect()
+
+    #     # Calculate the center of the thumb
+    #     center = thumb_rect.center()
+
+    #     # Simulate a mouse move event over the center of the thumb
+    #     QTest.mouseMove(slider, center)
+
+    #     # Check if the tooltip is visible
+    #     self.assertTrue(QToolTip.isVisible())
 
 
     # def test_collected_points_update_on_checkbox_toggle_gui(self):
