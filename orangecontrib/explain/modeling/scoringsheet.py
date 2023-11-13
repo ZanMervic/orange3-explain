@@ -35,15 +35,24 @@ class ScoringSheetModel(Model):
 class ScoringSheetLearner(Learner):
 
     __returns__ = ScoringSheetModel
-
     preprocessors = [Discretize(method=Binning()), Impute(), Continuize()]
-    feature_to_group = None
-    def __init__(self, num_attr_after_selection, num_decision_params, max_points_per_param, num_input_features):
+    def __init__(
+            self, num_attr_after_selection, num_decision_params, max_points_per_param, 
+            num_input_features, preprocessors=None
+        ):
+        # Set the num_decision_params, max_points_per_param, and num_input_features normally
         self.num_decision_params = num_decision_params
         self.max_points_per_param = max_points_per_param
         self.num_input_features = num_input_features
-        self.preprocessors.append(SelectBestFeatures(method=ReliefF(), k=num_attr_after_selection))
-        super().__init__()
+        self.feature_to_group = None
+
+        if preprocessors is None:
+            self.preprocessors = [
+                Discretize(method=Binning()), Impute(), Continuize(), 
+                SelectBestFeatures(method=ReliefF(), k=num_attr_after_selection)
+            ]
+
+        super().__init__(preprocessors=preprocessors)
 
     def fit_storage(self, table):
         if not isinstance(table, Storage):

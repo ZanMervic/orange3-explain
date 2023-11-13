@@ -3,6 +3,7 @@ import unittest
 from orangewidget.tests.base import WidgetTest
 
 from Orange.data import Table
+from Orange.preprocess import Impute
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
 from orangecontrib.explain.widgets.owscoringsheet import OWScoringSheet
@@ -45,7 +46,6 @@ class TestOWScoringSheet(WidgetTest):
         self.assertEqual(learner.max_points_per_param, 8)
         self.assertEqual(learner.num_input_features, 4)
 
-
     def test_settings_in_model(self):
         self.widget.num_attr_after_selection = 20
         self.widget.num_decision_params = 7
@@ -74,7 +74,34 @@ class TestOWScoringSheet(WidgetTest):
         self.widget.custom_features_checkbox = False
         self.widget.custom_input_features()
         self.assertFalse(self.widget.Information.custom_number_of_input_features_used.is_shown())
+
+    def test_custom_preprocessors_information(self):
+        preprocessor = Impute()
+        self.send_signal(self.widget.Inputs.preprocessor, preprocessor)
+        self.assertTrue(self.widget.Information.ignored_preprocessors.is_shown())
+
+        self.send_signal(self.widget.Inputs.preprocessor, None)
+        self.assertFalse(self.widget.Information.ignored_preprocessors.is_shown())
+
+    def test_custom_preprocessors_spin_disabled(self):
+        preprocessor = Impute()
+        self.send_signal(self.widget.Inputs.preprocessor, preprocessor)
+        self.assertFalse(self.widget.num_attr_after_selection_spin.isEnabled())
+
+    def test_default_preprocessors_are_used(self):
+        learner = self.get_output(self.widget.Outputs.learner)
+
+        self.assertIsNotNone(learner.preprocessors)
+        self.assertEqual(len(learner.preprocessors), 4)
         
+    def test_custom_preprocessors_are_used(self):
+        preprocessor = Impute()
+        self.send_signal(self.widget.Inputs.preprocessor, preprocessor)
+        learner = self.get_output(self.widget.Outputs.learner)
+
+        self.assertIsNotNone(learner.preprocessors)
+        self.assertEqual(len(learner.preprocessors), 1)
+        self.assertEqual(learner.preprocessors[0], preprocessor)
 
 
 if __name__ == "__main__":

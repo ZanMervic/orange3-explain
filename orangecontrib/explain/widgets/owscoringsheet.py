@@ -37,12 +37,6 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
     class Outputs(OWBaseLearner.Outputs):
         pass
 
-    class Information(OWBaseLearner.Information):
-        ignored_preprocessors = Msg(
-            "This widget has a very specific preprocessing which could be affected by the inputed preprocessor. "
-        )
-
-
     # Preprocessing
     num_attr_after_selection = Setting(20)
 
@@ -76,19 +70,21 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
             )
         )
 
+        self.num_attr_after_selection_spin = gui.spin(
+            None,
+            self,
+            "num_attr_after_selection",
+            minv=1,
+            maxv=100,
+            step=1,
+            orientation=Qt.Horizontal,
+            alignment=Qt.AlignRight,
+            callback=self.settings_changed,
+        )
+
         form.addRow(
             "Number of Attributes After Feature Selection:",
-            gui.spin(
-                None,
-                self,
-                "num_attr_after_selection",
-                minv=1,
-                maxv=100,
-                step=1,
-                orientation=Qt.Horizontal,
-                alignment=Qt.AlignRight,
-                callback=self.settings_changed,
-            ),
+            self.num_attr_after_selection_spin,
         )
 
         form.addRow(
@@ -179,12 +175,20 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
         self.cancel()
         super().set_preprocessor(preprocessor)
 
+        # Enable or disable the spin box based on whether a preprocessor is set
+        self.num_attr_after_selection_spin.setEnabled(preprocessor is None)
+        if preprocessor:
+            self.Information.ignored_preprocessors()
+        else:
+            self.Information.ignored_preprocessors.clear()
+
     def create_learner(self):
         return self.LEARNER(
             num_attr_after_selection=self.num_attr_after_selection,
             num_decision_params=self.num_decision_params,
             max_points_per_param=self.max_points_per_param,
             num_input_features=self.num_input_features if self.custom_features_checkbox else None,
+            preprocessors=self.preprocessors,
         )
     
     def update_model(self):
