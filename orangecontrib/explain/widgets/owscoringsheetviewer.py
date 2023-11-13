@@ -51,6 +51,10 @@ class ScoringSheetTable(QTableWidget):
             self.setItem(i, 2, checkbox)
 
             self.setItem(i, 3, QTableWidgetItem('0'))
+            
+            for col in range(self.columnCount()):
+                item = self.item(i, col)
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
         
         # Resize columns to fit the contents
         self.resize_columns_to_contents()
@@ -114,6 +118,8 @@ class RiskSlider(QWidget):
         self.setMouseTracking(True)
         self.target_class = None
 
+        self.label_frequency = 1
+
     def setup_labels(self):
         """
         Set up the labels for the slider. 
@@ -154,6 +160,27 @@ class RiskSlider(QWidget):
         closest_point_index = min(range(len(self.points)), key=lambda i: abs(self.points[i]-value))
         self.slider.setValue(closest_point_index)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_label_frequency()
+        self.update()
+
+    def update_label_frequency(self):
+        """
+        Update the label frequency based on the width of the slider and the number of points.
+        Label frequency determines how many labels are shown on the slider.
+        """
+        total_width = self.slider.width()
+        label_width = QFontMetrics(self.font()).boundingRect('100.0%').width()
+        max_labels = total_width // label_width
+
+        frequencies = [1, 2, 5, 10, 20, 50, 100]
+        for frequency in frequencies:
+            if max_labels >= len(self.points) / frequency:
+                self.label_frequency = frequency
+                break
+
+
     def paintEvent(self, event):
         """
         Paint the point and probabilitie labels above and below the tick marks respectively.
@@ -167,24 +194,25 @@ class RiskSlider(QWidget):
         fm = QFontMetrics(painter.font())
 
         for i, point in enumerate(self.points):
-            # Calculate the x position of the tick mark
-            x_pos = QStyle.sliderPositionFromValue(self.slider.minimum(),
-                                                self.slider.maximum(), i, 
-                                                self.slider.width()) + self.slider.x()
+            if i % self.label_frequency == 0:
+                # Calculate the x position of the tick mark
+                x_pos = QStyle.sliderPositionFromValue(self.slider.minimum(),
+                                                    self.slider.maximum(), i, 
+                                                    self.slider.width()) + self.slider.x()
 
-            # Draw the point label above the tick mark
-            point_str = str(point)
-            point_rect = fm.boundingRect(point_str)
-            point_x = int(x_pos - point_rect.width() / 2)
-            point_y = int(self.slider.y() - self.textMargin - point_rect.height())
-            painter.drawText(QRect(point_x, point_y, point_rect.width(), point_rect.height()), Qt.AlignCenter, point_str)
+                # Draw the point label above the tick mark
+                point_str = str(point)
+                point_rect = fm.boundingRect(point_str)
+                point_x = int(x_pos - point_rect.width() / 2)
+                point_y = int(self.slider.y() - self.textMargin - point_rect.height())
+                painter.drawText(QRect(point_x, point_y, point_rect.width(), point_rect.height()), Qt.AlignCenter, point_str)
 
-            # Draw the probability label below the tick mark
-            prob_str = str(round(self.probabilities[i], 1)) + "%"
-            prob_rect = fm.boundingRect(prob_str)
-            prob_x = int(x_pos - prob_rect.width() / 2)
-            prob_y = int(self.slider.y() + self.slider.height() + self.textMargin)
-            painter.drawText(QRect(prob_x, prob_y, prob_rect.width(), prob_rect.height()), Qt.AlignCenter, prob_str)
+                # Draw the probability label below the tick mark
+                prob_str = str(round(self.probabilities[i], 1)) + "%"
+                prob_rect = fm.boundingRect(prob_str)
+                prob_x = int(x_pos - prob_rect.width() / 2)
+                prob_y = int(self.slider.y() + self.slider.height() + self.textMargin)
+                painter.drawText(QRect(prob_x, prob_y, prob_rect.width(), prob_rect.height()), Qt.AlignCenter, prob_str)
 
         painter.end()
 
