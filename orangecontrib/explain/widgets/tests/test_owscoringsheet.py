@@ -64,16 +64,23 @@ class TestOWScoringSheet(WidgetTest):
 
         self.assertEqual(len(coefficients), self.widget.num_attr_after_selection)
         self.assertEqual(len(non_zero_coefficients), self.widget.num_decision_params)
-        self.assertLessEqual(max(non_zero_coefficients, key=lambda x: abs(x)), self.widget.max_points_per_param)
+        self.assertLessEqual(
+            max(non_zero_coefficients, key=lambda x: abs(x)),
+            self.widget.max_points_per_param,
+        )
 
     def test_custom_number_input_features_information(self):
         self.widget.custom_features_checkbox = True
         self.widget.custom_input_features()
-        self.assertTrue(self.widget.Information.custom_number_of_input_features_used.is_shown())
-        
+        self.assertTrue(
+            self.widget.Information.custom_number_of_input_features_used.is_shown()
+        )
+
         self.widget.custom_features_checkbox = False
         self.widget.custom_input_features()
-        self.assertFalse(self.widget.Information.custom_number_of_input_features_used.is_shown())
+        self.assertFalse(
+            self.widget.Information.custom_number_of_input_features_used.is_shown()
+        )
 
     def test_custom_preprocessors_information(self):
         preprocessor = Impute()
@@ -93,7 +100,7 @@ class TestOWScoringSheet(WidgetTest):
 
         self.assertIsNotNone(learner.preprocessors)
         self.assertEqual(len(learner.preprocessors), 4)
-        
+
     def test_custom_preprocessors_are_used(self):
         preprocessor = Impute()
         self.send_signal(self.widget.Inputs.preprocessor, preprocessor)

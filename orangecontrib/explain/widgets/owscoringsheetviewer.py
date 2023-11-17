@@ -6,8 +6,17 @@ from Orange.classification import Model
 from PyQt5 import QtGui
 
 from PyQt5.QtWidgets import (
-    QTableWidget, QTableWidgetItem, QSlider, QLabel, QVBoxLayout,
-    QHBoxLayout, QWidget, QGridLayout, QStyle, QToolTip, QStyleOptionSlider
+    QTableWidget,
+    QTableWidgetItem,
+    QSlider,
+    QLabel,
+    QVBoxLayout,
+    QHBoxLayout,
+    QWidget,
+    QGridLayout,
+    QStyle,
+    QToolTip,
+    QStyleOptionSlider,
 )
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QPainter, QFontMetrics
@@ -19,10 +28,7 @@ from fasterrisk.utils import get_support_indices, get_all_product_booleans
 import numpy as np
 
 
-
-
 class ScoringSheetTable(QTableWidget):
-
     def __init__(self, main_widget, parent=None):
         """
         Initialize the ScoringSheetTable. It sets the column headers and connects the itemChanged signal
@@ -30,32 +36,37 @@ class ScoringSheetTable(QTableWidget):
         """
         super().__init__(parent)
         self.main_widget = main_widget
-        self.setColumnCount(4)
-        self.setHorizontalHeaderLabels(['Attribute Name', 'Attribute Points', 'Selected', 'Collected Points'])
+        self.setColumnCount(3)
+        self.setHorizontalHeaderLabels(
+            ["Attribute Name", "Points", "Selected"]
+        )
         self.itemChanged.connect(self.handle_item_changed)
 
     def populate_table(self, attributes, coefficients):
         """
         Populates the table with the given attributes and coefficients. It creates a row for each attribute and
         populates the first two columns with the attribute name and coefficient respectively. The third column
-        contains a checkbox that allows the user to select the attribute. The fourth column contains the points
-        collected for the attribute. Initially, the fourth column is set to 0 for all attributes.
+        contains a checkbox that allows the user to select the attribute.
         """
         self.setRowCount(len(attributes))
         for i, (attr, coef) in enumerate(zip(attributes, coefficients)):
+            # First column
             self.setItem(i, 0, QTableWidgetItem(attr))
-            self.setItem(i, 1, QTableWidgetItem(str(coef)))
 
+            # Second column (align text to the right)
+            coef_item = QTableWidgetItem(str(coef))
+            coef_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.setItem(i, 1, coef_item)
+
+            # Third column (checkbox)
             checkbox = QTableWidgetItem()
             checkbox.setCheckState(Qt.Unchecked)
             self.setItem(i, 2, checkbox)
 
-            self.setItem(i, 3, QTableWidgetItem('0'))
-            
             for col in range(self.columnCount()):
                 item = self.item(i, col)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-        
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsSelectable)
+
         # Resize columns to fit the contents
         self.resize_columns_to_contents()
 
@@ -68,22 +79,11 @@ class ScoringSheetTable(QTableWidget):
 
     def handle_item_changed(self, item):
         """
-        Handles the change in the state of the checkbox. If the checkbox is checked, the points collected for the
-        corresponding attribute is set to the coefficient. If the checkbox is unchecked, the points collected for
-        the corresponding attribute is set to 0. It also updates the slider value.
+        Handles the change in the state of the checkbox. 
+        It updates the slider value depending on the collected points.
         """
         if item.column() == 2:
-            self.blockSignals(True)
-            row = item.row()
-            if item.checkState() == Qt.Checked:
-                self.setItem(row, 3, QTableWidgetItem(self.item(row, 1).text()))
-            else:
-                self.setItem(row, 3, QTableWidgetItem('0'))
-            self.blockSignals(False)
             self.main_widget._update_slider_value()
-
-
-
 
 
 class RiskSlider(QWidget):
@@ -96,7 +96,9 @@ class RiskSlider(QWidget):
         self.topMargin = 20
         self.rightMargin = 20
         self.bottomMargin = 20
-        self.layout.setContentsMargins(self.leftMargin, self.topMargin, self.rightMargin, self.bottomMargin)
+        self.layout.setContentsMargins(
+            self.leftMargin, self.topMargin, self.rightMargin, self.bottomMargin
+        )
 
         # Setup the labels
         self.setup_labels()
@@ -122,7 +124,7 @@ class RiskSlider(QWidget):
 
     def setup_labels(self):
         """
-        Set up the labels for the slider. 
+        Set up the labels for the slider.
         It creates a vertical layout for the labels and adds it to the main layout.
         It is only called once when the widget is initialized.
         """
@@ -142,7 +144,7 @@ class RiskSlider(QWidget):
 
     def setup_slider(self):
         """
-        Set up the slider with the given points and probabilities. 
+        Set up the slider with the given points and probabilities.
         It sets the minimum and maximum values (of the indexes for the ticks) of the slider.
         It is called when the points and probabilities are updated.
         """
@@ -157,7 +159,9 @@ class RiskSlider(QWidget):
         """
         if not self.points:
             return
-        closest_point_index = min(range(len(self.points)), key=lambda i: abs(self.points[i]-value))
+        closest_point_index = min(
+            range(len(self.points)), key=lambda i: abs(self.points[i] - value)
+        )
         self.slider.setValue(closest_point_index)
 
     def resizeEvent(self, event):
@@ -171,7 +175,7 @@ class RiskSlider(QWidget):
         Label frequency determines how many labels are shown on the slider.
         """
         total_width = self.slider.width()
-        label_width = QFontMetrics(self.font()).boundingRect('100.0%').width()
+        label_width = QFontMetrics(self.font()).boundingRect("100.0%").width()
         max_labels = total_width // label_width
 
         frequencies = [1, 2, 5, 10, 20, 50, 100]
@@ -179,7 +183,6 @@ class RiskSlider(QWidget):
             if max_labels >= len(self.points) / frequency:
                 self.label_frequency = frequency
                 break
-
 
     def paintEvent(self, event):
         """
@@ -196,23 +199,37 @@ class RiskSlider(QWidget):
         for i, point in enumerate(self.points):
             if i % self.label_frequency == 0:
                 # Calculate the x position of the tick mark
-                x_pos = QStyle.sliderPositionFromValue(self.slider.minimum(),
-                                                    self.slider.maximum(), i, 
-                                                    self.slider.width()) + self.slider.x()
+                x_pos = (
+                    QStyle.sliderPositionFromValue(
+                        self.slider.minimum(),
+                        self.slider.maximum(),
+                        i,
+                        self.slider.width(),
+                    )
+                    + self.slider.x()
+                )
 
                 # Draw the point label above the tick mark
                 point_str = str(point)
                 point_rect = fm.boundingRect(point_str)
                 point_x = int(x_pos - point_rect.width() / 2)
                 point_y = int(self.slider.y() - self.textMargin - point_rect.height())
-                painter.drawText(QRect(point_x, point_y, point_rect.width(), point_rect.height()), Qt.AlignCenter, point_str)
+                painter.drawText(
+                    QRect(point_x, point_y, point_rect.width(), point_rect.height()),
+                    Qt.AlignCenter,
+                    point_str,
+                )
 
                 # Draw the probability label below the tick mark
                 prob_str = str(round(self.probabilities[i], 1)) + "%"
                 prob_rect = fm.boundingRect(prob_str)
                 prob_x = int(x_pos - prob_rect.width() / 2)
                 prob_y = int(self.slider.y() + self.slider.height() + self.textMargin)
-                painter.drawText(QRect(prob_x, prob_y, prob_rect.width(), prob_rect.height()), Qt.AlignCenter, prob_str)
+                painter.drawText(
+                    QRect(prob_x, prob_y, prob_rect.width(), prob_rect.height()),
+                    Qt.AlignCenter,
+                    prob_str,
+                )
 
         painter.end()
 
@@ -233,13 +250,13 @@ class RiskSlider(QWidget):
         """
         Handle hover events for the slider. Display the tooltip when the mouse is over the slider thumb.
         """
-        thumbRect = self.get_thumb_rect()  # This is a method from QSlider that gives you the thumb rect
+        thumbRect = (self.get_thumb_rect())
         if thumbRect.contains(pos) and self.points:
             value = self.slider.value()
             points = self.points[value]
             probability = self.probabilities[value]
             tooltip = str(
-                f"<b>Target Class: {self.target_class}</b>\n "
+                f"<b>{self.target_class}</b>\n "
                 f"<hr style='margin: 0px; padding: 0px; border: 0px; height: 1px; background-color: #000000'>"
                 f"<b>Points:</b> {int(points)}<br>"
                 f"<b>Probability:</b> {probability:.1f}%"
@@ -247,7 +264,6 @@ class RiskSlider(QWidget):
             QToolTip.showText(self.slider.mapToGlobal(pos), tooltip)
         else:
             QToolTip.hideText()
-
 
     def get_thumb_rect(self):
         """
@@ -259,7 +275,9 @@ class RiskSlider(QWidget):
         style = self.slider.style()
 
         # Get the area of the slider that contains the handle
-        handle_rect = style.subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, self.slider)
+        handle_rect = style.subControlRect(
+            QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, self.slider
+        )
 
         # Calculate the position and size of the thumb
         thumb_x = handle_rect.x()
@@ -270,14 +288,14 @@ class RiskSlider(QWidget):
         return QRect(thumb_x, thumb_y, thumb_width, thumb_height)
 
 
-
-
 class OWScoringSheetViewer(OWWidget):
     """
     Allows visualization of the scoring sheet model.
     """
+
     name = "Scoring Sheet Viewer"
     description = "Visualize the scoring sheet model."
+    want_control_area = False
     # icon = "icons/ScoringSheetViewer.svg"
     # priority = 90
 
@@ -289,11 +307,16 @@ class OWScoringSheetViewer(OWWidget):
         features = Output("Features", AttributeList)
 
     target_class_index = ContextSetting(0)
+
     class Error(OWWidget.Error):
-        invalid_classifier = Msg("Scoring Sheet Viewer only accepts a Scoring Sheet model.")
+        invalid_classifier = Msg(
+            "Scoring Sheet Viewer only accepts a Scoring Sheet model."
+        )
 
     class Information(OWWidget.Information):
-        multiple_instances = Msg("The input data contains multiple instances. Only the first instance will be used.")
+        multiple_instances = Msg(
+            "The input data contains multiple instances. Only the first instance will be used."
+        )
 
     def __init__(self):
         super().__init__()
@@ -309,6 +332,7 @@ class OWScoringSheetViewer(OWWidget):
         self.old_target_class_index = self.target_class_index
 
         self._setup_gui()
+        self.resize(700, 400)
 
 
     # GUI Methods -------------------------------------------------------------------------------------
@@ -319,12 +343,30 @@ class OWScoringSheetViewer(OWWidget):
         self.class_combo = gui.comboBox(
             None, self, "target_class_index", callback=self._class_combo_changed
         )
+        self.class_combo.setFixedWidth(150)
         grid.addWidget(QLabel("Target class:"), 0, 0)
         grid.addWidget(self.class_combo, 0, 1)
         gui.widgetBox(self.controlArea, orientation=grid)
         self.controlArea.layout().addStretch()
 
         # Main Area Layout
+        self.coefficient_table = ScoringSheetTable(main_widget=self, parent=self)
+        gui.widgetBox(self.mainArea).layout().addWidget(self.coefficient_table)
+
+        self.risk_slider = RiskSlider([], [], self)
+        gui.widgetBox(self.mainArea).layout().addWidget(self.risk_slider)
+
+    def _setup_gui(self):
+        # Create a new widget box for the combo box in the main area
+        combo_box_layout = gui.widgetBox(self.mainArea, orientation='horizontal')
+        self.class_combo = gui.comboBox(
+            combo_box_layout, self, "target_class_index", callback=self._class_combo_changed
+        )
+        self.class_combo.setFixedWidth(100)
+        combo_box_layout.layout().addWidget(QLabel("Target class:"))
+        combo_box_layout.layout().addWidget(self.class_combo)
+        combo_box_layout.layout().addStretch()
+
         self.coefficient_table = ScoringSheetTable(main_widget=self, parent=self)
         gui.widgetBox(self.mainArea).layout().addWidget(self.coefficient_table)
 
@@ -353,7 +395,7 @@ class OWScoringSheetViewer(OWWidget):
         """Populate the scoring sheet based on extracted data."""
         if self.attributes and self.coefficients:
             self.coefficient_table.populate_table(self.attributes, self.coefficients)
-            
+
             # Update points and probabilities in the custom slider
             self.risk_slider.points = self.all_scores
             self.risk_slider.probabilities = self.all_risks
@@ -369,9 +411,9 @@ class OWScoringSheetViewer(OWWidget):
         if not self.coefficient_table:
             return
         total_coefficient = sum(
-            float(self.coefficient_table.item(row, 3).text()) 
+            float(self.coefficient_table.item(row, 1).text())
             for row in range(self.coefficient_table.rowCount())
-            if self.coefficient_table.item(row, 3)  # Check if the item exists
+            if self.coefficient_table.item(row, 2) and self.coefficient_table.item(row, 2).checkState() == Qt.Checked
         )
         self.risk_slider.move_to_value(total_coefficient)
 
@@ -410,7 +452,6 @@ class OWScoringSheetViewer(OWWidget):
 
         self._adjust_for_target_class()
         self._update_controls()
-    
 
     def _adjust_for_target_class(self):
         """
@@ -426,13 +467,11 @@ class OWScoringSheetViewer(OWWidget):
         self.all_risks = [100 - risk for risk in self.all_risks]
         self.all_risks.sort()
 
-
     # Classifier Input Methods -----------------------------------------------------------------------------------
-
 
     def _extract_data_from_model(self, classifier):
         """
-        Extracts the attributes, non-zero coefficients, all possible 
+        Extracts the attributes, non-zero coefficients, all possible
         scores, and corresponding probabilities from the model.
         """
         model = classifier.model
@@ -441,7 +480,7 @@ class OWScoringSheetViewer(OWWidget):
         nonzero_indices = get_support_indices(model.coefficients)
         attributes = [model.featureNames[i] for i in nonzero_indices]
         coefficients = [int(model.coefficients[i]) for i in nonzero_indices]
-        
+
         # 2. Extracting possible points and corresponding probabilities
         len_nonzero_indices = len(nonzero_indices)
         # If we have less than 10 attributes, we can calculate all the possible combinations of scores.
@@ -449,19 +488,21 @@ class OWScoringSheetViewer(OWWidget):
             all_product_booleans = get_all_product_booleans(len_nonzero_indices)
             all_scores = all_product_booleans.dot(model.coefficients[nonzero_indices])
             all_scores = np.unique(all_scores)
-        # If there are more than 10 non-zero coefficients, calculating all possible combinations of scores 
-        # might be computationally intensive. Instead, the method calculates all possible scores from the 
+        # If there are more than 10 non-zero coefficients, calculating all possible combinations of scores
+        # might be computationally intensive. Instead, the method calculates all possible scores from the
         # training dataset (X_train) and then picks some quantile points (in this case, a maximum of 20) to represent the possible scores.
         else:
             all_scores = model.X_train.dot(model.coefficients)
             all_scores = np.unique(all_scores)
             quantile_len = min(20, len(all_scores))
-            quantile_points = np.asarray(range(1, 1+quantile_len)) / quantile_len
-            all_scores = np.quantile(all_scores, quantile_points, method = "closest_observation")
+            quantile_points = np.asarray(range(1, 1 + quantile_len)) / quantile_len
+            all_scores = np.quantile(
+                all_scores, quantile_points, method="closest_observation"
+            )
 
         all_scaled_scores = (model.intercept + all_scores) / model.multiplier
         all_risks = 1 / (1 + np.exp(-all_scaled_scores))
-        
+
         self.attributes = attributes
         self.coefficients = coefficients
         self.all_scores = all_scores.tolist()
@@ -502,7 +543,6 @@ class OWScoringSheetViewer(OWWidget):
 
         self._set_table_checkboxes()
 
-
     def _set_table_checkboxes(self):
         """
         Sets the checkboxes in the coefficient table based on the instance points.
@@ -513,8 +553,7 @@ class OWScoringSheetViewer(OWWidget):
                 self.coefficient_table.item(row, 2).setCheckState(Qt.Checked)
             else:
                 self.coefficient_table.item(row, 2).setCheckState(Qt.Unchecked)
-        
-        
+
     def _init_instance_points(self):
         """
         Initialize the instance which is used to show the points collected for each attribute.
@@ -522,7 +561,10 @@ class OWScoringSheetViewer(OWWidget):
         """
         instances = self.data.transform(self.domain)
         self.instance = instances[0]
-        self.instance_points = [self.instance.list[i] for i in get_support_indices(self.classifier.model.coefficients)]
+        self.instance_points = [
+            self.instance.list[i]
+            for i in get_support_indices(self.classifier.model.coefficients)
+        ]
 
     # Input Methods -----------------------------------------------------------------------------------
 
@@ -539,7 +581,9 @@ class OWScoringSheetViewer(OWWidget):
         self._update_controls()
         # Output the features
         self.Outputs.features.send(
-            AttributeList([feature for feature in self.domain if feature.name in self.attributes])
+            AttributeList(
+                [feature for feature in self.domain if feature.name in self.attributes]
+            )
         )
 
     @Inputs.data
@@ -559,7 +603,8 @@ if __name__ == "__main__":
     from Orange.widgets.utils.widgetpreview import WidgetPreview
     from Orange.data import Table
     from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
+
     data = Table("heart_disease")
     learner = ScoringSheetLearner(15, 5, 5, None)
     model = learner(data)
-    WidgetPreview(OWScoringSheetViewer).run(set_classifier = model, set_data = data)
+    WidgetPreview(OWScoringSheetViewer).run(set_classifier=model, set_data=data)

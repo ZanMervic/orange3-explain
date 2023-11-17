@@ -6,16 +6,14 @@ from Orange.widgets.widget import Msg
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting
 
-from AnyQt.QtWidgets import QFormLayout, QLabel
 from AnyQt.QtCore import Qt
 
 from orangecontrib.explain.modeling.scoringsheet import ScoringSheetLearner
 
+
 class ScoringSheetRunner:
     @staticmethod
-    def run(
-        learner: ScoringSheetLearner, data: Table, state: TaskState
-    ) -> Model:
+    def run(learner: ScoringSheetLearner, data: Table, state: TaskState) -> Model:
         if data is None:
             return None
         state.set_status("Learning...")
@@ -24,7 +22,7 @@ class ScoringSheetRunner:
 
 
 class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
-    name = 'Scoring Sheet'
+    name = "Scoring Sheet"
     description = "A fast and explainable classifier."
     # icon = "icons/ScoringSheet.svg"
     # priority = 90
@@ -50,107 +48,83 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
     class Information(OWBaseLearner.Information):
         custom_number_of_input_features_used = Msg(
             "If the number of input features used is too low for the number of decision parameters, \n"
-            "the number of decision parameters will be adjusted to fit the model.")
+            "the number of decision parameters will be adjusted to fit the model."
+        )
 
     def __init__(self):
         ConcurrentWidgetMixin.__init__(self)
         OWBaseLearner.__init__(self)
 
     def add_main_layout(self):
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft)
-
-        gui.widgetBox(self.controlArea, True, orientation=form)
-
-        form.addRow(
-            QLabel(
-                "<span style='font-weight:bold;'>"
-                "Preprocessing"
-                "</span>"
-            )
-        )
+        box = gui.vBox(self.controlArea, "Preprocessing")
 
         self.num_attr_after_selection_spin = gui.spin(
-            None,
+            box,
             self,
             "num_attr_after_selection",
             minv=1,
             maxv=100,
             step=1,
+            label="Number of Attributes After Feature Selection:",
             orientation=Qt.Horizontal,
             alignment=Qt.AlignRight,
             callback=self.settings_changed,
+            controlWidth=45,
         )
 
-        form.addRow(
-            "Number of Attributes After Feature Selection:",
-            self.num_attr_after_selection_spin,
-        )
+        box = gui.vBox(self.controlArea, "Model Parameters")
 
-        form.addRow(
-            QLabel(
-                "<span style='font-weight:bold;'>"
-                "Model Parameters"
-                "</span>"
-            )
-        )
+        gui.spin(
+            box,
+            self,
+            "num_decision_params",
+            minv=1,
+            maxv=50,
+            step=1,
+            label="Maximum Number of Decision Parameters:",
+            orientation=Qt.Horizontal,
+            alignment=Qt.AlignRight,
+            callback=self.settings_changed,
+            controlWidth=45,
+        ),
 
-        form.addRow(
-            "Maximum Number of Decision Parameters:",
-            gui.spin(
-                None,
-                self,
-                "num_decision_params",
-                minv=1,
-                maxv=50,
-                step=1,
-                orientation=Qt.Horizontal,
-                alignment=Qt.AlignRight,
-                callback=self.settings_changed,
-            ),
-        )
+        gui.spin(
+            box,
+            self,
+            "max_points_per_param",
+            minv=1,
+            maxv=100,
+            step=1,
+            label="Maximum Points per Decision Parameter:",
+            orientation=Qt.Horizontal,
+            alignment=Qt.AlignRight,
+            callback=self.settings_changed,
+            controlWidth=45,
+        ),
 
-        form.addRow(
-            "Maximum Points per Decision Parameter:",
-            gui.spin(
-                None,
-                self,
-                "max_points_per_param",
-                minv=1,
-                maxv=100,
-                step=1,
-                orientation=Qt.Horizontal,
-                alignment=Qt.AlignRight,
-                callback=self.settings_changed,
-            ),
-        )
+        gui.checkBox(
+            box,
+            self,
+            "custom_features_checkbox",
+            label="Custom number of input features",
+            callback=[self.settings_changed, self.custom_input_features],
+        ),
 
-        form.addRow(
-            gui.checkBox(
-                None,
-                self,
-                "custom_features_checkbox",
-                label="Custom number of input features",
-                callback=[self.settings_changed, self.custom_input_features]
-            ),
-        )
-
-        self.custom_features_label = QLabel("Number of Input Features Used:")
         self.custom_features = gui.spin(
-                None,
-                self,
-                "num_input_features",
-                minv=1,
-                maxv=50,
-                step=1,
-                orientation=Qt.Horizontal,
-                alignment=Qt.AlignRight,
-                callback=self.settings_changed,
+            box,
+            self,
+            "num_input_features",
+            minv=1,
+            maxv=50,
+            step=1,
+            label="Number of Input Features Used:",
+            orientation=Qt.Horizontal,
+            alignment=Qt.AlignRight,
+            callback=self.settings_changed,
+            controlWidth=45,
         )
 
-        form.addRow(self.custom_features_label, self.custom_features)
         self.custom_input_features()
-
 
     def custom_input_features(self):
         """
@@ -163,7 +137,6 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
         else:
             self.Information.custom_number_of_input_features_used.clear()
         self.apply()
-
 
     @Inputs.data
     def set_data(self, data):
@@ -187,10 +160,12 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
             num_attr_after_selection=self.num_attr_after_selection,
             num_decision_params=self.num_decision_params,
             max_points_per_param=self.max_points_per_param,
-            num_input_features=self.num_input_features if self.custom_features_checkbox else None,
+            num_input_features=self.num_input_features
+            if self.custom_features_checkbox
+            else None,
             preprocessors=self.preprocessors,
         )
-    
+
     def update_model(self):
         self.cancel()
         self.show_fitting_failed(None)
@@ -199,14 +174,14 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
             self.start(ScoringSheetRunner.run, self.learner, self.data)
         else:
             self.Outputs.model.send(None)
-    
+
     def get_learner_parameters(self):
         return (
             self.num_decision_params,
             self.max_points_per_param,
             self.num_input_features,
         )
-    
+
     def on_partial_result(self, _):
         pass
 
@@ -228,4 +203,5 @@ class OWScoringSheet(OWBaseLearner, ConcurrentWidgetMixin):
 
 if __name__ == "__main__":
     from Orange.widgets.utils.widgetpreview import WidgetPreview
+
     WidgetPreview(OWScoringSheet).run()
