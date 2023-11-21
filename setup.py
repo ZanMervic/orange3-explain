@@ -50,7 +50,7 @@ INSTALL_REQUIRES = [
     "scipy",
     "shap >=0.42.1",
     "scikit-learn>=1.0.1",
-    "fasterrisk",
+    "fasterrisk>=0.1.7",
 ]
 
 EXTRAS_REQUIRE = {

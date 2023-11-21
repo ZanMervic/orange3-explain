@@ -126,7 +126,6 @@ class ScoringSheetLearner(Learner):
 
 if __name__ == "__main__":
     learner = ScoringSheetLearner(20, 5, 10, None)
-    # table = Table("https://datasets.biolab.si/core/adult.tab")s
     table = Table("https://datasets.biolab.si/core/heart_disease.tab")
     model = learner(table)
     model(table)

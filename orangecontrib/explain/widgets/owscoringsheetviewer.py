@@ -338,25 +338,6 @@ class OWScoringSheetViewer(OWWidget):
     # GUI Methods -------------------------------------------------------------------------------------
 
     def _setup_gui(self):
-        # Control Area Layout
-        grid = QGridLayout()
-        self.class_combo = gui.comboBox(
-            None, self, "target_class_index", callback=self._class_combo_changed
-        )
-        self.class_combo.setFixedWidth(150)
-        grid.addWidget(QLabel("Target class:"), 0, 0)
-        grid.addWidget(self.class_combo, 0, 1)
-        gui.widgetBox(self.controlArea, orientation=grid)
-        self.controlArea.layout().addStretch()
-
-        # Main Area Layout
-        self.coefficient_table = ScoringSheetTable(main_widget=self, parent=self)
-        gui.widgetBox(self.mainArea).layout().addWidget(self.coefficient_table)
-
-        self.risk_slider = RiskSlider([], [], self)
-        gui.widgetBox(self.mainArea).layout().addWidget(self.risk_slider)
-
-    def _setup_gui(self):
         # Create a new widget box for the combo box in the main area
         combo_box_layout = gui.widgetBox(self.mainArea, orientation='horizontal')
         self.class_combo = gui.comboBox(
@@ -508,6 +489,10 @@ class OWScoringSheetViewer(OWWidget):
         self.all_scores = all_scores.tolist()
         self.all_risks = (all_risks * 100).tolist()
         self.domain = classifier.domain
+
+        # For some reason when leading the model the scores and probabilities are 
+        # set for the wrong target class. This is a workaround to fix that.
+        self._adjust_for_target_class()
 
     def _is_valid_classifier(self, classifier):
         """Check if the classifier is a valid ScoringSheetModel."""
